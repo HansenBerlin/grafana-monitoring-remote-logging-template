@@ -1,0 +1,12 @@
+﻿datasources:
+- name: Prometheus
+  access: proxy
+  type: prometheus
+  url: http://prometheus_grafprom:9090
+  isDefault: true
+
+- name: Loki
+  access: proxy
+  isDefault: true
+  type: loki
+  url: "http://loki:3100"

@@ -1,0 +1,49 @@
+﻿@page "/"
+@using Prometheus
+@using Serilog
+
+@code {
+    private static readonly Gauge ShortJobsInQueue = Metrics
+        .CreateGauge("short_jobs_queued", "Number of jobs waiting for processing in the queue.");
+    
+    private static readonly Histogram LongJobsInQueue = Metrics
+        .CreateHistogram("long_jobs_queued", "Number of jobs waiting for processing in the queue.");
+
+
+    private string _longOperationState = "IDLE";
+    private long _incrementThis;
+    private long _incrementTimes = 0;
+    private void Callback(MouseEventArgs obj)
+    {
+        Log.Information("Processed {RecordCount} records in {TimeMS}.", 1, 1);
+        ShortJobsInQueue.Inc();
+        _incrementThis++;
+
+    }
+    
+    private async Task LongOperation()
+    {
+        using (LongJobsInQueue.NewTimer())
+        {
+            _longOperationState = "RUNNING";
+            int rnd = new Random().Next(1000, 10000);
+            await Task.Delay(rnd);
+            _longOperationState = "IDLE";
+        }
+    }
+    
+    private void Callback1(MouseEventArgs obj)
+    {
+        for (int i = 0; i < _incrementTimes; i++)
+        {
+            _incrementThis++;
+        }
+    }
+}
+
+<h1>Counter: @_incrementThis</h1>
+<h1>Long operation state: @_longOperationState</h1>
+<button @onclick="Callback">Increment one</button>
+<button @onclick="async () => await LongOperation()">Start long operation</button>
+<input type="number" @bind="_incrementTimes"/>
+<button @onclick="Callback1">Increment @_incrementTimes times</button>
