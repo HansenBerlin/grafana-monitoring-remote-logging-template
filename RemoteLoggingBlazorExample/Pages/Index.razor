@@ -1,49 +1,108 @@
 ﻿@page "/"
-@using Prometheus
+@using M = RemoteLoggingBlazorExample.MetricExamples.Monitor
 @using Serilog
 
 @code {
-    private static readonly Gauge ShortJobsInQueue = Metrics
-        .CreateGauge("short_jobs_queued", "Number of jobs waiting for processing in the queue.");
+
+    private string _logLevelSelected = "DEBUG";
+    private string _logMessage = "";
+    private string _valueAdded = "";
+    private int _observedValue;
+    private int _timerObservationTimeLeft;
     
-    private static readonly Histogram LongJobsInQueue = Metrics
-        .CreateHistogram("long_jobs_queued", "Number of jobs waiting for processing in the queue.");
-
-
-    private string _longOperationState = "IDLE";
-    private long _incrementThis;
-    private long _incrementTimes = 0;
-    private void Callback(MouseEventArgs obj)
+    private async Task AddRandomValue()
     {
-        Log.Information("Processed {RecordCount} records in {TimeMS}.", 1, 1);
-        ShortJobsInQueue.Inc();
-        _incrementThis++;
-
+        int val = new Random().Next(1, 1001);
+        M.OrderValueHistogram.Observe(val);
+        _valueAdded = val.ToString();
+        await Task.Delay(3000);
+        _valueAdded = "";
     }
-    
-    private async Task LongOperation()
+
+    private async Task RunTimer()
     {
-        using (LongJobsInQueue.NewTimer())
+        M.RequestSizeSummary.Observe(_observedValue);
+        _timerObservationTimeLeft = 600;
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        while (await timer.WaitForNextTickAsync())
         {
-            _longOperationState = "RUNNING";
-            int rnd = new Random().Next(1000, 10000);
-            await Task.Delay(rnd);
-            _longOperationState = "IDLE";
+            _timerObservationTimeLeft--;
+            StateHasChanged();
+            if(_timerObservationTimeLeft == 0)
+                break;
         }
     }
-    
-    private void Callback1(MouseEventArgs obj)
+
+    private void WriteToLog()
     {
-        for (int i = 0; i < _incrementTimes; i++)
+        if (_logLevelSelected == "DEBUG")
         {
-            _incrementThis++;
+            Log.Debug(_logMessage);
         }
+        if (_logLevelSelected == "INFORMATION")
+        {
+            Log.Information(_logMessage);
+        }
+        if (_logLevelSelected == "WARNING")
+        {
+            Log.Warning(_logMessage);
+        }
+        if (_logLevelSelected == "ERROR")
+        {
+            Log.Error(_logMessage);
+        }
+        _logMessage = "";
     }
 }
+<div style="display: flex; flex-direction: column; justify-content: center;  
+    align-items: center; font-family: monospace; gap: 20px; padding: 50px;">
+    <div class="box-container">
+        <h2>Logging Demo</h2>
+        <h4>Selected Log Level: @_logLevelSelected</h4>
+        <div style="width: 100%; display: flex; gap: 10px;">
+            <button disabled="@(_logLevelSelected == "DEBUG")" @onclick="@(() => { _logLevelSelected = "DEBUG"; })">DEBUG</button>
+            <button disabled="@(_logLevelSelected == "INFO")" @onclick="@(() => { _logLevelSelected = "INFO"; })">INFO</button>
+            <button disabled="@(_logLevelSelected == "WARNING")" @onclick="@(() => { _logLevelSelected = "WARNING"; })">WARNING</button>
+            <button disabled="@(_logLevelSelected == "ERROR")" @onclick="@(() => { _logLevelSelected = "ERROR"; })">ERROR</button>
+        </div>
+        <input @bind="@_logMessage" type="text" placeholder="Your log message"/>
+        <button @onclick="WriteToLog">Write to log</button>
+    </div>
+    
+    <div class="box-container">
+        <h2>Counter Demo</h2>
+        <h4>Counter Value: @M.ProcessedJobCount.Value</h4>
+        <button @onclick="() => M.ProcessedJobCount.Inc()">Add Processed Job</button>
+    </div>
 
-<h1>Counter: @_incrementThis</h1>
-<h1>Long operation state: @_longOperationState</h1>
-<button @onclick="Callback">Increment one</button>
-<button @onclick="async () => await LongOperation()">Start long operation</button>
-<input type="number" @bind="_incrementTimes"/>
-<button @onclick="Callback1">Increment @_incrementTimes times</button>
+    <div class="box-container">
+        <h2>Gauge Demo</h2>
+        <h4>Gauge Value: @M.JobsInQueue.Value</h4>
+        <button @onclick="() => M.JobsInQueue.Inc()">Add Job To Que</button>
+        <button @onclick="() => M.JobsInQueue.Dec()">Remove Job From Que</button>
+    </div>
+
+    <div class="box-container">
+        <h2>Histogramm Demo</h2>
+        <h4>@($"Value added: {_valueAdded}")</h4>
+        <h4>Histogramm values count: @M.OrderValueHistogram.Count</h4>
+        <h4>Histogramm values sum: @M.OrderValueHistogram.Sum</h4>
+        <button @onclick="async () => await AddRandomValue()">Add random value between 1 and 1000</button>
+    </div>
+
+    <div class="box-container">
+        <h2>Summary Demo</h2>
+        <h4>@($"Observation time left: {_timerObservationTimeLeft}")</h4>
+        <h4>@($"Currently observed value: {_observedValue}")</h4>
+        <button disabled="@(_timerObservationTimeLeft != 0)"
+                @onclick="async () => await RunTimer()">
+            Start Observation (10 Minutes)
+        </button>
+        <div style="width: 100%; display: flex; gap: 10px;">
+            <button @onclick="() => { _observedValue--; }">Decrease</button>
+            <button @onclick="() => { _observedValue++; }">Increase</button>
+        </div>
+    </div>
+</div>
+
+

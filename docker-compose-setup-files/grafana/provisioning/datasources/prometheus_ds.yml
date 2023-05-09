@@ -2,7 +2,7 @@
 - name: Prometheus
   access: proxy
   type: prometheus
-  url: http://prometheus_grafprom:9090
+  url: http://prometheus-monitoring-example:9090
   isDefault: true
 
 - name: Loki
